@@ -6,6 +6,7 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.example.proyectoaplicativo.presentation.screens.buscar.BuscarScreen
 import com.example.proyectoaplicativo.presentation.screens.detalle.DetalleScreen
 import com.example.proyectoaplicativo.presentation.screens.form.FormScreen
 import com.example.proyectoaplicativo.presentation.screens.inicio.InicioScreen
@@ -16,7 +17,6 @@ fun AppNavigation(navController: NavHostController) {
         navController = navController,
         startDestination = RutasNav.LOGIN
     ) {
-
         //Login
         composable(RutasNav.LOGIN) {
             LoginScreen(
@@ -27,8 +27,6 @@ fun AppNavigation(navController: NavHostController) {
                 }
             )
         }
-
-
         //Inicio (Lista de tickets)
         composable(BottomNavItem.Inicio.route) {
             InicioScreen(
@@ -37,9 +35,7 @@ fun AppNavigation(navController: NavHostController) {
                 }
             )
         }
-
-
-        //Formulario Crear Ticket
+        //Formulario (Crear Ticket)
         composable(
             route = BottomNavItem.Form.route,
             arguments = listOf(navArgument("id") {
@@ -50,8 +46,6 @@ fun AppNavigation(navController: NavHostController) {
         ) {
             FormScreen(onSuccess = { navController.popBackStack() })
         }
-
-
         //Detalle del Ticket
         composable(
             route = BottomNavItem.Detalle.route,
@@ -62,6 +56,14 @@ fun AppNavigation(navController: NavHostController) {
             DetalleScreen(
                 onTicketDeleted = {
                     navController.popBackStack()
+                }
+            )
+        }
+        //Búsqueda de Tickets
+        composable(BottomNavItem.Buscar.route) {
+            BuscarScreen(
+                onDetalleTicket = { ticketId ->
+                    navController.navigate(BottomNavItem.Detalle.passID(ticketId))
                 }
             )
         }

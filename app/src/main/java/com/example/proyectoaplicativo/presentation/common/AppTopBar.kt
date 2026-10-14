@@ -73,15 +73,6 @@ fun AppTopBar(navController: NavController) {
 
             Spacer(modifier = Modifier.weight(1f))
 
-            IconButton(onClick = {
-                navController.navigate(BottomNavItem.Buscar.route)}) {
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = "Buscar",
-                    tint = colorPrincipal
-                )
-            }
-
             IconButton(onClick = { navController.navigate(RutasNav.LOGIN){popUpTo(0) {inclusive = true}
             }
             }) {
