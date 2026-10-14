@@ -1,0 +1,40 @@
+TABLAS:
+
+	/Clientes
+		id
+		nombre
+
+	/Tickets
+		id
+		codigo
+		titulo
+		descripcion
+		estado
+		prioridad
+		cliente
+
+	/Usuarios
+		id
+		usuario
+		contrasena
+		nombre
+		rol
+
+
+
+
+URL: https://bjo2tvjmu2.execute-api.us-east-1.amazonaws.com/
+
+GET
+https://bjo2tvjmu2.execute-api.us-east-1.amazonaws.com/clientes
+https://bjo2tvjmu2.execute-api.us-east-1.amazonaws.com/tickets
+https://bjo2tvjmu2.execute-api.us-east-1.amazonaws.com/tickets/{id}
+
+POST
+https://bjo2tvjmu2.execute-api.us-east-1.amazonaws.com/tickets
+
+PUT
+https://bjo2tvjmu2.execute-api.us-east-1.amazonaws.com/tickets{id}
+
+DELETE
+https://bjo2tvjmu2.execute-api.us-east-1.amazonaws.com/tickets/{id}

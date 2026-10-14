@@ -1,0 +1,174 @@
+import json
+import os
+import uuid
+from datetime import datetime, timezone
+from decimal import Decimal
+import boto3
+# Inicialización de DynamoDB
+dynamodb = boto3.resource('dynamodb')
+TABLE_NAME = os.environ.get('TABLE_NAME', 'groove')
+table = dynamodb.Table(TABLE_NAME)
+# Clave 
+CATALOG_KEY = '__CATALOGO_TICKETS__'
+class DecimalEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return int(obj) if obj % 1 == 0 else float(obj)
+        return super(DecimalEncoder, self).default(obj)
+def get_timestamp():
+    return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
+def build_response(status_code, body=None):
+    response = {
+        'statusCode': status_code,
+        'headers': {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
+            'Access-Control-Allow-Headers': '*'
+        }
+    }
+    if body is not None:
+        response['body'] = json.dumps(body, cls=DecimalEncoder)
+    return response
+def lambda_handler(event, context):
+    try:
+        http_context = event.get('requestContext', {}).get('http', {})
+        http_method = http_context.get('method')
+        raw_path = event.get('rawPath', '') or http_context.get('path', '')
+        
+        path_parameters = event.get('pathParameters') or {}
+        ticket_id = path_parameters.get('id')
+        
+        # 0. CATÁLOGO DE CLIENTES (GET /clientes)
+        if http_method == 'GET' and 'clientes' in raw_path:
+            clientes_demo = [
+                {"id": "cli-01", "nombre": "UPC"},
+                {"id": "cli-02", "nombre": "BCP"},
+                {"id": "cli-03", "nombre": "Gloria"},
+                {"id": "cli-04", "nombre": "Rimac Seguros"},
+                {"id": "cli-05", "nombre": "Movistar"}
+            ]
+            return build_response(200, {
+                "success": True,
+                "data": { "items": clientes_demo },
+                "timestamp": get_timestamp()
+            })
+        # 1. LISTAR TICKETS (GET /tickets)
+        if http_method == 'GET' and not ticket_id:
+            response = table.get_item(Key={'id': CATALOG_KEY})
+            item = response.get('Item')
+            items = item.get('items', []) if item else []
+            
+            body = {
+                "success": True,
+                "data": {
+                    "items": items,
+                    "nextKey": None
+                },
+                "timestamp": get_timestamp()
+            }
+            return build_response(200, body)
+        # 2. BUSCAR TICKET POR ID (GET /tickets/{id})
+        elif http_method == 'GET' and ticket_id:
+            response = table.get_item(Key={'id': ticket_id})
+            item = response.get('Item')
+            
+            if not item:
+                return build_response(404, {
+                    "success": False,
+                    "message": "Ticket no encontrado",
+                    "timestamp": get_timestamp()
+                })
+                
+            body = {
+                "success": True,
+                "data": item,
+                "timestamp": get_timestamp()
+            }
+            return build_response(200, body)
+        # 3. INSERTAR TICKET (POST /tickets)
+        elif http_method == 'POST':
+            data = json.loads(event.get('body', '{}'))
+            generated_id = str(uuid.uuid4())
+            codigo = data.get('codigo') or f"TCK-{generated_id[:4].upper()}"
+            
+            new_ticket = {
+                "id": generated_id,
+                "codigo": codigo,
+                "titulo": data.get('titulo', ''),
+                "descripcion": data.get('descripcion', ''),
+                "estado": data.get('estado', 'Abierto'),
+                "prioridad": data.get('prioridad', 'Media'),
+                "cliente": data.get('cliente', '')
+            }
+            
+            # Guarda el ticket individual
+            table.put_item(Item=new_ticket)
+            
+            # Actualiza el catálogo general de tickets
+            cat_response = table.get_item(Key={'id': CATALOG_KEY})
+            cat_item = cat_response.get('Item')
+            current_items = cat_item.get('items', []) if cat_item else []
+            current_items.insert(0, new_ticket)
+            table.put_item(Item={'id': CATALOG_KEY, 'items': current_items})
+            
+            body = {
+                "success": True,
+                "data": new_ticket,
+                "timestamp": get_timestamp()
+            }
+            return build_response(201, body)
+        # 4. ACTUALIZAR TICKET (PUT /tickets/{id})
+        elif http_method == 'PUT' and ticket_id:
+            data = json.loads(event.get('body', '{}'))
+            
+            updated_ticket = {
+                "id": ticket_id,
+                "codigo": data.get('codigo', ''),
+                "titulo": data.get('titulo', ''),
+                "descripcion": data.get('descripcion', ''),
+                "estado": data.get('estado', 'Abierto'),
+                "prioridad": data.get('prioridad', 'Media'),
+                "cliente": data.get('cliente', '')
+            }
+            
+            table.put_item(Item=updated_ticket)
+            
+            # Actualiza el catálogo general
+            cat_response = table.get_item(Key={'id': CATALOG_KEY})
+            cat_item = cat_response.get('Item')
+            if cat_item:
+                current_items = [t for t in cat_item.get('items', []) if t.get('id') != ticket_id]
+                current_items.insert(0, updated_ticket)
+                table.put_item(Item={'id': CATALOG_KEY, 'items': current_items})
+            
+            body = {
+                "success": True,
+                "data": updated_ticket,
+                "timestamp": get_timestamp()
+            }
+            return build_response(200, body)
+        # 5. ELIMINAR TICKET (DELETE /tickets/{id})
+        elif http_method == 'DELETE' and ticket_id:
+            table.delete_item(Key={'id': ticket_id})
+            
+            # Remueve del catálogo general
+            cat_response = table.get_item(Key={'id': CATALOG_KEY})
+            cat_item = cat_response.get('Item')
+            if cat_item:
+                current_items = [t for t in cat_item.get('items', []) if t.get('id') != ticket_id]
+                table.put_item(Item={'id': CATALOG_KEY, 'items': current_items})
+                
+            return build_response(204)
+        else:
+            return build_response(400, {
+                "success": False,
+                "message": "Ruta o método no soportado",
+                "timestamp": get_timestamp()
+            })
+    except Exception as e:
+        return build_response(500, {
+            "success": False,
+            "error": str(e),
+            "timestamp": get_timestamp()
+        })
